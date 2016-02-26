@@ -1,0 +1,192 @@
+#! /usr/bin/env php
+<?php
+
+/***********************************************************
+
+WHAT IS THIS SOFTWARE?
+
+   "Archive", by dalecosp.  Use it to clean up your $HOMEDIR,
+or your webroot, whatever.  Easy script, this moves files
+specified by the script arguments to a configurable $ARCHIVEDIR,
+optionally compressing the file(s) in the process.  If your
+shell supports wildcards/globbing (and whose doesn't, to some
+extent? Shame on them!) or if you just like typing lots of
+filenames, you can give it as many files as you wish at once.
+
+HOW DO I USE THIS SOFTWARE?
+
+   To use this script, put it in your $PATH, and call it
+from the CLI, thusly (I keep a copy in /usr/bin):
+
+# archive somefile
+
+   To modify this software to work on your system/environment,
+see the USER CONFIGURATION section after the
+COPYRIGHT/LICENSE/DISCLAIMER below.
+
+CAN I HACK/FORK/COPY/REWRITE/CONTRIBUTE TO THIS SOFTWARE?
+
+   You are welcome, if you hack PHP, to modify this and
+improve it.  There's lots that could be done, but I fear
+to add too many features 'cause it's likely that I am just
+reinventing the wheel anyway, and I've got other work to do.
+Certainly, to operate in UNIX tradition, we'd need a "-v"
+and a "-q" option (verbose and quiet), perhaps a "-c" option
+or a "--version".  I'm sure someone would like to have support
+for zip/PKZIP, too, but I'm not to "up on that, and like I
+said, I've other projects.
+
+   Note that I've not tested this for *lots* of files,
+so I make no claims about its performance (heck, I make no
+claims about it whatsoever.  But I do use it ;-).  Also, read
+the paragraphs below:
+
+COPYRIGHT/LICENSE/DISCLAIMER:
+
+Copyright (C) 2005-2016 by Kevin Kinsey, "dalecosp".  You may use this
+software without cost, subject to the following terms:
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. Neither the name of this software nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+***********************************************************/
+
+############## USER CONFIGURATION ##########################
+
+# Path to move command; if you don't know where mv(1) is, try
+# `whereis mv` at your shell prompt.
+$move           = "/bin/mv";
+
+# Paths to various compression programs.
+$compress       = "/usr/bin/compress";
+$gzip           = "/usr/bin/gzip";
+$bzip2          = "/usr/bin/bzip2";
+
+# Where do you want your files?  If you leave it empty, we'll
+# put your files in an "archive" subdirectory of your current
+# location (the location you call us from) - which is my preference.
+$ARCHIVEDIR     = '';
+
+# By default archived files will be compressed.  Set this var
+# to only move files into ARCHIVEDIR
+$MOVE_ONLY      = false;
+
+########### END OF CONFIG OPTIONS  #########################
+
+########### DON'T EDIT BELOW HERE  #########################
+####### (unless you know what you're doing!) ###############
+
+$dir            = getcwd();
+                error_reporting(E_PARSE);
+
+# An array of possible compress options
+$zips           = array("-Z", "-gz", "-bz2");
+
+# At present we insist that we only call one compression option
+if ( in_array( $argv[1], $zips )&& in_array( $argv[2], $zips )) {
+   echo "You can't call more than one compression option! \n";
+   usage();
+}
+
+# You can't call us without a file to operate on!
+if ( $argv[1]=='' || ( in_array($argv[1], $zips ) && $argv[2]=='' )) {
+   echo "You must call a filename! \n";
+   usage();
+}
+#determine our compression algorithm
+if ( in_array( $argv[1], $zips )) {
+
+   $zipping             = 1;
+
+   switch($argv[1]) {
+      case "-Z":
+         $zipper        = $compress;
+         break;
+      case "-gz":
+         $zipper        = $gzip;
+         break;
+      case "-bz2":
+         $zipper        = $bzip2;
+         break;
+   }
+}
+
+# Should we zip by default?
+if ( empty( $zipper ) && !$MOVE_ONLY ) {
+   $zipping             = 1;
+   $zipper              = $bzip2;
+}
+
+# Here's the main() thing!
+
+foreach ( $argv as $argument ) {        //loop through the file arguments
+
+   if ( $ARCHIVEDIR == '' ) {
+
+      $ARCHIVEDIR = "$dir/archive";     //determine archival directory
+
+   }
+
+   if ( !is_dir($ARCHIVEDIR )) {
+
+      mkdir( $ARCHIVEDIR );             //create if it non-extant
+
+   }
+
+      if ( $argument != $argv[0] && ( !in_array( $argument, $zips ))) {
+
+         echo "Archiving ./".$argument."\n";
+
+         system("$move \"$dir/$argument\" \"$ARCHIVEDIR/$argument\"",$return);
+
+         if ( $return == 0 ) { // Unix return value, not a PHP test
+            echo "Move successful.\n";
+         } else {
+            echo "Move failed!\n";
+         }
+         if ( $zipping ) {
+            if ( !is_dir( "$ARCHIVEDIR/$argument" )) {
+               system( "$zipper \"$ARCHIVEDIR/$argument\"",$return2 );
+            }
+         if ( $return2==0 ) {
+            echo "File compressed.\n";
+         } else {
+            compression_failed();
+         }
+      }
+   }
+}
+
+function compression_failed() {
+
+   echo "Compression failed on $ARCHIVEDIR/$argument!\nIf you called archive with the -Z option check that file is not\nempty; it may be, or else it has no whitespace to compress. \n";
+
+} //EOF
+
+function usage() {
+
+   echo "Usage: archive [-Z -gz -bz2] filename1 ... filename[n]\nThis will move the file(s) to ./archive/\n(and optionally compress the file(s)). \n";
+   exit;
+
+} //EOF
